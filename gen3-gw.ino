@@ -3,29 +3,32 @@
 #include <ctype.h>
 #include "application.h"
 
-#define BUFF_SIZE 1024
 SYSTEM_MODE(MANUAL); /*do not autoconnect to particle cloud*/
 SYSTEM_THREAD(ENABLED);
-STARTUP(cellular_credentials_set("orange.ug", "", "", NULL));
 
 // Primary SPI with DMA
 // SCK => A3, MISO => A4, MOSI => A5, SS => A2 (default)
 SdFat sd;
 const uint8_t chipSelect = SS;
 
-char c;
+
 String data="", errormsg="", systime="";
 File myFile;
-int rep_count=0,i=0,d=0,delcount=0, ind=0,filesize=0;
+int rep_count=0,delcount=0, ind=0,filesize=0;
 double SOC=100.0;
 bool newdata=false, client_connected=false, cellular_is_on=false, fuelGaugeIsAsleep=false;
 int n=0; /*increments sleep periods during low power conditions*/
 
+/*sd card settings*/
+String  temp="", apn="", user="",pass="";
+int reps=0;
+
 
 /*TCP configuration*/
 TCPClient client;
-String server = "wimea.mak.ac.ug";
-byte buff [BUFF_SIZE];  /*see transmission metrics regarding choice of 1024*/
+String server = "wimea.mak.ac.ug"; //default server
+int port=10005; // default port
+byte buff [1024];  /*see transmission metrics regarding choice of 1024*/
 
 FuelGauge fuel;
 CellularSignal sig;
@@ -65,14 +68,53 @@ void setup() {
 	}
 
 	SOC=fuel.getSoC();
-
 	superVthread = new Thread("superVthread", sysreset, NULL);
 
+if(myFile.open("config.txt", O_READ))
+{
+	int d;
+	while ((d = myFile.read()) >= 0)
+	{
+		temp.concat((char)d);
+		if(d=='\n')
+		{
+			if(temp.indexOf("APN")>-1)
+			{
+			  apn = temp.substring(4);
+			}
+			if(temp.indexOf("USER")>-1)
+			{
+			  user = temp.substring(9);
+			}
+			if(temp.indexOf("PASS")>-1)
+			{
+			  pass = temp.substring(5);
+			}
+			if(temp.indexOf("SERVER")>-1)
+			{
+			  server = temp.substring(7);
+			}
+			if(temp.indexOf("UPLOAD")>-1)
+			{
+			  reps = atoi(temp.substring(12));
+			}
+			if(temp.indexOf("PORT")>-1)
+			{
+			  port = atoi(temp.substring(5));
+			}
+		    temp="";
+		}
+	}
+	myFile.close();
+	cellular_credentials_set(apn, user, pass, NULL);
+}
+else
+errormsg+="Failed to open config file.";
 }
 
 void loop() {
-	/* open the file for write at end like the "Native SD library" */
-	if(fuelGaugeIsAsleep){
+
+	if(fuelGaugeIsAsleep){/*Fuel gauge must wake up to measure V_BAT and SOC*/
 		fuel.wakeup();
 		fuelGaugeIsAsleep=false;
 	}
@@ -88,7 +130,7 @@ void loop() {
 		}
 		RGB.control(false);
 	}
-
+char c;
 	while(1){
 		if(Serial1.available())
 		{
@@ -97,7 +139,7 @@ void loop() {
 			data +=c;
 			if(c=='\n')
 			{
-				if((ind = data.indexOf("RTC_T")) > -1 && data.indexOf("TXT") > -1 )
+				if((ind = data.indexOf("RTC_T")) > -1)
 				{
 					myFile.print(data);
 					systime=data.substring(ind, ind+26);
@@ -123,7 +165,7 @@ void loop() {
 		}
 	}
 
-	if(rep_count >= 700 && SOC >= 15.0)
+	if(rep_count >= reps && SOC >= 15.0)
 	{
 		rep_count=0;
 		n=0; //reset any previous value of n
@@ -133,7 +175,7 @@ void loop() {
 		cellular_is_on = true;
 		Cellular.connect();
 		while(!Cellular.ready()); //wait until condition is true
-		if (client.connect(server, 10005))
+		if (client.connect(server, port))
 		{
 			client_connected=true;
 		}
@@ -143,10 +185,11 @@ void loop() {
 		filesize = myFile.size();
 		client.println(systime + "TXT=electron RSSI=" + sig.rssi + " QUAL="+sig.qual + " FILE_SIZE="+filesize);
 
+		int d, i=0;
 		while ((d = myFile.read()) >= 0) {
 			buff[i]=d;
 			i++;
-			if(i==BUFF_SIZE){
+			if(i==1024){
 				client.write(buff, i);
 				i=0;
 				memset(buff,0,sizeof(buff));
