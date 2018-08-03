@@ -5,6 +5,7 @@
 
 SYSTEM_MODE(MANUAL); /*do not autoconnect to particle cloud*/
 SYSTEM_THREAD(ENABLED);
+STARTUP(cellular_credentials_set("internet", "", "", NULL));
 
 // Primary SPI with DMA
 // SCK => A3, MISO => A4, MOSI => A5, SS => A2 (default)
@@ -80,19 +81,20 @@ if(myFile.open("config.txt", O_READ))
 		{
 			if(temp.indexOf("APN")>-1)
 			{
-			  apn = temp.substring(4);
+			  apn = temp.substring(4).replace('\n','\0');
 			}
 			if(temp.indexOf("USER")>-1)
 			{
-			  user = temp.substring(9);
+			  user = temp.substring(9).replace('\n','\0');
 			}
 			if(temp.indexOf("PASS")>-1)
 			{
-			  pass = temp.substring(5);
+			  pass = temp.substring(5).replace('\n','\0');
 			}
 			if(temp.indexOf("SERVER")>-1)
 			{
-			  server = temp.substring(7);
+			  server = temp.substring(7).replace("\n","");
+				server.remove(server.length()-1); /*remove the character at the last index if its a null terminator*/
 			}
 			if(temp.indexOf("UPLOAD")>-1)
 			{
@@ -106,7 +108,7 @@ if(myFile.open("config.txt", O_READ))
 		}
 	}
 	myFile.close();
-	cellular_credentials_set(apn, user, pass, NULL);
+
 }
 else
 errormsg+="Failed to open config file.";
