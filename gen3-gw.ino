@@ -27,7 +27,7 @@ int reps=0;
 
 /*TCP configuration*/
 TCPClient client;
-String server = "wimea.mak.ac.ug"; //default server
+String server = ""; //default server
 int port=10005; // default port
 byte buff [1024];  /*see transmission metrics regarding choice of 1024*/
 
