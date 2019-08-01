@@ -1,4 +1,4 @@
-APN:orange.ug
+APN:
 USERNAME:
 PASS:
 UPLOADCOUNT:500
